@@ -1,0 +1,4 @@
+dl-myo
+numpy
+pyqtgraph
+PySide6
