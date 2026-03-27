@@ -2,7 +2,9 @@
 
 **/__pycache__/
 
-**/dl-myo/**
-./dl-myo/**
+**/dl-myo
+./dl-myo
 
-./data/**  
+**/data
+
+**/*.png
