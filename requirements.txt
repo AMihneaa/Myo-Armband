@@ -2,3 +2,4 @@ dl-myo
 numpy
 pyqtgraph
 PySide6
+qasync
