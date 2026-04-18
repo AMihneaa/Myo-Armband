@@ -1,10 +1,13 @@
 import sys
+import time
 import asyncio
 import logging
 from collections import deque
 
 import pyqtgraph as pg
 import qasync
+
+from dataclasses import dataclass
 
 from myo import MyoClient
 from myo.types import (
@@ -25,6 +28,19 @@ from PySide6.QtWidgets import QApplication, QMainWindow
 
 addr = "E4:96:A9:A7:5C:74"
 logger = logging.getLogger(__name__)
+
+@dataclass
+class EMGSample:
+    timestamp: float
+    seq: int
+    channels: tuple
+
+@dataclass
+class IMUSample:
+    timestamp: float
+    orientation: tuple
+    accelerometer: tuple
+    gyroscope: tuple
 
 
 class CircularBuffer:
@@ -47,6 +63,7 @@ class TestClient(MyoClient):
         imuCircularBuffer_size: int = 150,
     ):
         super().__init__(aggregate_all=aggregate_all, aggregate_emg=aggregate_emg)
+        self._emg_seq= 0
         self._emgCircularBuffer = CircularBuffer(emgCircularBuffer_size)
         self._imuCircularBuffer = CircularBuffer(imuCircularBuffer_size)
 
@@ -60,8 +77,13 @@ class TestClient(MyoClient):
         self._emgCircularBuffer.append(tuple(eds))
 
     async def on_emg_data(self, data: EMGData):
-        self._emgCircularBuffer.append(tuple(data.sample1))
-        self._emgCircularBuffer.append(tuple(data.sample2))
+        t= time.monotonic()
+        seq= self._emg_seq
+
+        self._emgCircularBuffer.append(EMGSample(t, seq, tuple(data.sample1)))
+        self._emgCircularBuffer.append(EMGSample(t, seq, tuple(data.sample2)))
+
+        self._emg_seq+= 1
 
     async def on_motion_event(self, me: MotionEvent):
         pass
@@ -70,9 +92,12 @@ class TestClient(MyoClient):
         pass
 
     async def on_imu_data(self, imu: IMUData):
+        t= time.monotonic()
         self._imuCircularBuffer.append(
+            IMUSample
             (
-                tuple(imu.orientation),
+                t, 
+                (imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z),
                 tuple(imu.accelerometer),
                 tuple(imu.gyroscope),
             )
@@ -137,14 +162,23 @@ class MainWindow(QMainWindow):
             curve = self.emg_plots[ch].plot()
             self.emg_curves.append(curve)
 
+        colors = ['r', 'g', 'b']
+        labels = ['X', 'Y', 'Z']
+
         self.acc_curves = []
-        for _ in range(3):
-            curve = self.acc_plot.plot()
+        for i in range(3):
+            curve = self.acc_plot.plot(
+                pen=pg.mkPen(color=colors[i], width=1.5),
+                name=labels[i]
+            )
             self.acc_curves.append(curve)
 
         self.gyro_curves = []
-        for _ in range(3):
-            curve = self.gyro_plot.plot()
+        for i in range(3):
+            curve = self.gyro_plot.plot(
+                pen=pg.mkPen(color=colors[i], width=1.5),
+                name=labels[i]
+            )
             self.gyro_curves.append(curve)
 
     def _create_timer(self):
@@ -167,7 +201,7 @@ class MainWindow(QMainWindow):
             return
 
         for ch in range(8):
-            y = [sample[ch] for sample in emg_samples]
+            y = [sample.channels[ch] for sample in emg_samples]
             self.emg_curves[ch].setData(y)
 
     def _update_imu_plots(self):
@@ -176,12 +210,9 @@ class MainWindow(QMainWindow):
         if not imu_samples:
             return
 
-        acc_samples = [sample[1] for sample in imu_samples]
-        gyro_samples = [sample[2] for sample in imu_samples]
-
         for axis in range(3):
-            acc_y = [sample[axis] for sample in acc_samples]
-            gyro_y = [sample[axis] for sample in gyro_samples]
+            acc_y = [sample.accelerometer[axis] for sample in imu_samples]
+            gyro_y = [sample.gyroscope[axis] for sample in imu_samples]
 
             self.acc_curves[axis].setData(acc_y)
             self.gyro_curves[axis].setData(gyro_y)
