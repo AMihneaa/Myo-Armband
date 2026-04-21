@@ -4,8 +4,8 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMainWindow, QLabel, QVBoxLayout, QWidget
 from PySide6.QtGui import QFont
 
-from ..acquisition.client import MyoStreamClient
-from ..recording.session import SessionRecorder
+from acquisition.client import MyoStreamClient
+from recording.session import SessionRecorder
 
 
 EMG_COLORS = ['#e6194b', '#3cb44b', '#4363d8', '#f58231',

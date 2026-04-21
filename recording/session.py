@@ -1,10 +1,10 @@
 import asyncio
 
-from ..config import REST_DURATION_S, PREPARE_DURATION_S
+from config import REST_DURATION_S, PREPARE_DURATION_S
 
-from ..acquisition.client import MyoStreamClient
-from ..recording.trial import TrialRecorder
-from ..storage.writer import TrialWriter
+from acquisition.client import MyoStreamClient
+from recording.trial import TrialRecorder
+from storage.writer import TrialWriter
 
 class SessionRecorder:
     def __init__(

@@ -3,7 +3,7 @@ import numpy as np
 from collections import deque
 from enum import Enum
 
-from ..acquisition.buffer import(
+from acquisition.buffer import(
     EMGSample,
 )
 

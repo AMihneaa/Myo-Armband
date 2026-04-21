@@ -7,16 +7,21 @@ from config import (
     IMU_TRIAL_SAMPLES,
 )
 
-from buffer import (
+from .buffer import (
     CircularBuffer,
     EMGSample,
-    IMUSample
+    IMUSample,
 )
 
 from myo import MyoClient
 from myo.types import (
     IMUData,
     EMGData,
+    ClassifierEvent,
+    AggregatedData,
+    MotionEvent,
+    FVData,
+    EMGDataSingle,
 )
 
 class MyoStreamClient(MyoClient):
@@ -35,6 +40,15 @@ class MyoStreamClient(MyoClient):
         self._emg_buffer: CircularBuffer= CircularBuffer(capacity= emg_buffer_capacity)
         
         self._imu_buffer: CircularBuffer= CircularBuffer(capacity= imu_buffer_capacity)
+
+    async def on_classifier_event(self, ce: ClassifierEvent):
+        pass
+
+    async def on_aggregated_data(self, ad: AggregatedData):
+        pass
+
+    async def on_emg_data_aggregated(self, eds):
+        return await super().on_emg_data_aggregated(eds)
 
     async def on_emg_data(self, data: EMGData):
         t= time.monotonic()
@@ -74,6 +88,12 @@ class MyoStreamClient(MyoClient):
                 gyroscope= tuple(imu.gyroscope)
             )
         )
+
+    async def on_motion_event(self, me: MotionEvent):
+        pass
+
+    async def on_fv_data(self, fvd: FVData):
+        pass
 
     def set_emg_callback(self, fn: callable) -> None:
         self._emg_callback= fn
