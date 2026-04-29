@@ -12,3 +12,9 @@
 **/data_raw
 
 **/*.parquet    
+
+**/test
+
+**/data_processed
+
+**/models
