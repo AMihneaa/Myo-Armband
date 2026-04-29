@@ -12,3 +12,5 @@
 **/data_raw
 
 **/*.parquet    
+
+**/test
