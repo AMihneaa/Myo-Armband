@@ -15,4 +15,22 @@ N_TRIALS= 7
 PREPARE_DURATION_S= 3.0
 REST_DURATION_S= 10.0
 
+
+# EMG Pipeline
 EMG_COLUMNS = [f"ch{i}" for i in range(8)]
+BASE_STAT = [
+        "env_rms",
+        "env_mav",
+        "raw_rms",
+        "raw_mav",
+        "iemg",
+        "ssi",
+        "var",
+        "wl",
+        "zc",
+        "ssc",
+        "wamp",
+        "log_rms",
+        "mnf",
+        "mdf",
+    ]
