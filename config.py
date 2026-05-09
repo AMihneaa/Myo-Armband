@@ -28,3 +28,10 @@ GESTURE_LABELS: dict[int, str]= {
 
 HDF5_DIR: str= "data_raw"
 HDF5_FILENAME_TEMPLATE: str= "subject_{subject_id:02d}_session_{session_id}.h5"
+
+BP_LOW: float= 10.0
+BP_HIGH: float= 95.0
+ENV_CUTOFF: float= 10.0
+NOTCH_FREQ: float= 50.0
+NOTCH_Q: float= 30.0
+APPLY_NOTCH: bool= True
