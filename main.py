@@ -17,7 +17,8 @@ from acquisition.client import MyoStreamClient
 from recording.trial import TrialRecorder
 from storage.writer import TrialWriter
 from recording.session import SessionRecorder
-from ui.monitor import MainWindow
+from ui.cue_window import CueWindow
+from ui.signal_window import SignalWindow
 
 from myo.types import ClassifierMode, EMGMode, IMUMode
 
@@ -49,13 +50,14 @@ async def main(app: QApplication, args: argparse.Namespace) -> None:
         writer=writer,
         gesture_ids=args.gesture_ids,
         n_trials=args.trials,
+        start_trial=args.start_trial,
     )
 
-    window= MainWindow(
-        client=client,
-        session_recorder=session,
-    )
-    window.show()
+    cue_window= CueWindow(session_recorder=session)
+    signal_window= SignalWindow(client=client)
+
+    cue_window.show()
+    signal_window.show()
 
     try:
         await client.setup(
@@ -90,7 +92,10 @@ if __name__ == "__main__":
         choices=valid_ids,
     )
     parser.add_argument("--trials", type=int, default=N_TRIALS)
+    parser.add_argument("--start_trial", type=int, default=1)
     args= parser.parse_args()
 
     app= QApplication(sys.argv)
     qasync.run(main(app, args))
+
+    

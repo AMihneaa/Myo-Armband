@@ -32,6 +32,7 @@ class SessionRecorder:
         writer: TrialWriter,
         gesture_ids: list[int],
         n_trials: int,
+        start_trial: int= 1,
     ) -> None:
         self._client= client
         self._trial_recorder= trial_recorder
@@ -43,6 +44,9 @@ class SessionRecorder:
 
         self._client.set_emg_callback(self._trial_recorder.on_emg_sample)
         self._client.set_imu_callback(self._trial_recorder.on_imu_sample)
+
+        self._start_trial= start_trial
+
 
     async def _rest(self, duration: float, text: str) -> None:
         elapsed= 0.0
@@ -76,10 +80,10 @@ class SessionRecorder:
 
             await self._familiarization(gesture_id)
 
-            for trial_num in range(1, self._n_trials + 1):
+            for trial_num in range(self._start_trial, self._start_trial + self._n_trials):
                 self.cue= SessionCue(
                     color="white",
-                    text=f"{gesture_name} | Trial {trial_num}/{self._n_trials} | Prepare",
+                    text=f"{gesture_name} | Trial {trial_num}/{self._start_trial + self._n_trials - 1} | Prepare",
                 )
                 await asyncio.sleep(PREPARE_DURATION_S)
 
@@ -95,7 +99,7 @@ class SessionRecorder:
 
                 self._trial_recorder.reset()
 
-                if trial_num < self._n_trials:
+                if trial_num < self._start_trial + self._n_trials - 1:
                     await self._rest(REST_BETWEEN_TRIALS_S, f"Rest | {gesture_name} | Next trial {trial_num + 1}")
 
             if gesture_idx < len(self._gesture_ids) - 1:
