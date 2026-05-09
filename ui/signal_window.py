@@ -1,11 +1,14 @@
 import pyqtgraph as pg
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QMainWindow, QLabel, QVBoxLayout, QWidget
-from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QScrollArea,
+)
 
 from acquisition.client import MyoStreamClient
-from recording.session import SessionRecorder, SessionCue
 
 
 EMG_COLORS= ['#e6194b', '#3cb44b', '#4363d8', '#f58231',
@@ -13,96 +16,67 @@ EMG_COLORS= ['#e6194b', '#3cb44b', '#4363d8', '#f58231',
 IMU_COLORS= ['r', 'g', 'b']
 IMU_LABELS= ['X', 'Y', 'Z']
 
-CUE_BACKGROUNDS= {
-    "white":  "#ffffff",
-    "green":  "#2ecc71",
-    "orange": "#e67e22",
-    "red":    "#e74c3c",
-    "gray":   "#1a1a1a",
-}
-
-CUE_TEXT_COLORS= {
-    "white":  "#111111",
-    "green":  "#111111",
-    "orange": "#111111",
-    "red":    "#ffffff",
-    "gray":   "#aaaaaa",
-}
+PLOT_HEIGHT= 200
+PLOT_WIDTH= 1360
 
 
-class MainWindow(QMainWindow):
+class SignalWindow(QMainWindow):
     def __init__(
         self,
         client: MyoStreamClient,
-        session_recorder: SessionRecorder= None,
         refresh_ms: int= 33,
     ) -> None:
         super().__init__()
 
         self._client= client
-        self._session_recorder= session_recorder
 
-        self.setWindowTitle("Myo Recorder")
-        self.resize(1400, 1200)
+        self.setWindowTitle("Myo Recorder — Signals")
+        self.resize(1400, 900)
 
         self._build_ui()
         self._build_curves()
         self._start_timer(refresh_ms)
 
     def _build_ui(self) -> None:
-        root= QWidget()
-        layout= QVBoxLayout(root)
+        scroll_area= QScrollArea()
+        scroll_area.setWidgetResizable(True)
+
+        container= QWidget()
+        layout= QVBoxLayout(container)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(4)
 
-        self._cue_widget= QWidget()
-        self._cue_widget.setFixedHeight(80)
-        self._cue_widget.setStyleSheet(f"background: {CUE_BACKGROUNDS['gray']};")
-
-        cue_layout= QVBoxLayout(self._cue_widget)
-        cue_layout.setContentsMargins(8, 4, 8, 4)
-        cue_layout.setSpacing(2)
-
-        self._cue_text= QLabel("")
-        text_font= QFont()
-        text_font.setPointSize(18)
-        text_font.setBold(True)
-        self._cue_text.setFont(text_font)
-
-        self._cue_timer= QLabel("")
-        timer_font= QFont()
-        timer_font.setPointSize(13)
-        self._cue_timer.setFont(timer_font)
-
-        cue_layout.addWidget(self._cue_text)
-        cue_layout.addWidget(self._cue_timer)
-        layout.addWidget(self._cue_widget)
-
-        self._graphics= pg.GraphicsLayoutWidget()
-        layout.addWidget(self._graphics)
-        self.setCentralWidget(root)
-
         self._emg_plots= []
         for ch in range(8):
-            plot= self._graphics.addPlot(title=f"EMG ch{ch + 1}")
+            plot= pg.PlotWidget(title=f"EMG ch{ch + 1}")
+            plot.setFixedHeight(PLOT_HEIGHT)
+            plot.setMinimumWidth(PLOT_WIDTH)
             plot.showGrid(x=True, y=True)
             plot.setLabel("left", f"ch{ch + 1}")
             if ch == 7:
                 plot.setLabel("bottom", "samples")
             self._emg_plots.append(plot)
-            self._graphics.nextRow()
+            layout.addWidget(plot)
 
-        self._acc_plot= self._graphics.addPlot(title="Accelerometer")
+        self._acc_plot= pg.PlotWidget(title="Accelerometer")
+        self._acc_plot.setFixedHeight(PLOT_HEIGHT)
+        self._acc_plot.setMinimumWidth(PLOT_WIDTH)
         self._acc_plot.showGrid(x=True, y=True)
         self._acc_plot.setLabel("left", "g")
         self._acc_plot.addLegend()
-        self._graphics.nextRow()
+        layout.addWidget(self._acc_plot)
 
-        self._gyro_plot= self._graphics.addPlot(title="Gyroscope")
+        self._gyro_plot= pg.PlotWidget(title="Gyroscope")
+        self._gyro_plot.setFixedHeight(PLOT_HEIGHT)
+        self._gyro_plot.setMinimumWidth(PLOT_WIDTH)
         self._gyro_plot.showGrid(x=True, y=True)
         self._gyro_plot.setLabel("left", "deg/s")
         self._gyro_plot.setLabel("bottom", "samples")
         self._gyro_plot.addLegend()
+        layout.addWidget(self._gyro_plot)
+
+        scroll_area.setWidget(container)
+        self.setCentralWidget(scroll_area)
 
     def _build_curves(self) -> None:
         self._emg_curves= []
@@ -134,28 +108,8 @@ class MainWindow(QMainWindow):
         self._timer.start(refresh_ms)
 
     def _update(self) -> None:
-        self._update_cue()
         self._update_emg()
         self._update_imu()
-
-    def _update_cue(self) -> None:
-        if self._session_recorder is None:
-            return
-
-        cue= self._session_recorder.cue
-
-        bg= CUE_BACKGROUNDS.get(cue.color, CUE_BACKGROUNDS["gray"])
-        fg= CUE_TEXT_COLORS.get(cue.color, "#ffffff")
-
-        self._cue_widget.setStyleSheet(f"background: {bg};")
-        self._cue_text.setStyleSheet(f"color: {fg};")
-        self._cue_text.setText(cue.text)
-
-        if cue.timer > 0.0:
-            self._cue_timer.setStyleSheet(f"color: {fg};")
-            self._cue_timer.setText(f"{cue.timer:.1f}s")
-        else:
-            self._cue_timer.setText("")
 
     def _update_emg(self) -> None:
         samples= self._client.emg_buffer.snapshot()

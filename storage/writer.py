@@ -1,42 +1,57 @@
 import numpy as np
-import pandas as pd
+import h5py
 
 from pathlib import Path
+from datetime import date
+
+from config import HDF5_DIR, HDF5_FILENAME_TEMPLATE, GESTURE_LABELS
+
 
 class TrialWriter:
     def __init__(
             self,
-            out_dir: str,
-            participant_id: int,
+            subject_id: int,
             session_id: int,
     ) -> None:
-        self._out_dir = Path(out_dir) / f'session{session_id}' / f'participant{participant_id}'
-        self._out_dir.mkdir(parents=True, exist_ok=True)
+        self._subject_id= subject_id
+        self._session_id= session_id
 
-        self._session_id = session_id
-        self._participant_id = participant_id
+        out_dir= Path(HDF5_DIR) / f"session_{session_id}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        filename= HDF5_FILENAME_TEMPLATE.format(
+            subject_id=subject_id,
+            session_id=session_id,
+        )
+        self._path= out_dir / filename
+        self._file= h5py.File(self._path, "a")
 
     def save(
             self,
-            array: np.ndarray,
+            emg: np.ndarray,
+            imu: np.ndarray,
             gesture_id: int,
             trial_id: int,
-    ) -> str:
-        file_name= f'session{self._session_id}_participant{self._participant_id}_gesture{gesture_id}_trial{trial_id}'
-        file_path= self._out_dir / f'{file_name}.parquet'
+    ) -> None:
+        gesture_name= GESTURE_LABELS[gesture_id]
 
-        ch_cols = [f"ch{i}" for i in range(array.shape[1])]
-        df_signal = pd.DataFrame(array, columns=ch_cols)
+        group_path= f"subject_{self._subject_id:02d}/session_{self._session_id}/gesture_{gesture_name}/trial_{trial_id:02d}"
+        group= self._file.require_group(group_path)
 
-        df_meta = pd.DataFrame({
-            "participant": self._participant_id,
-            "session": self._session_id,
-            "gesture": gesture_id,
-            "trial": trial_id,
-        }, index=range(len(array)))
+        if "emg" in group:
+            del group["emg"]
+        if "imu" in group:
+            del group["imu"]
 
-        df = pd.concat([df_meta, df_signal], axis=1)
-        df.to_parquet(file_path, index=False)
+        group.create_dataset("emg", data=emg.astype(np.float32))
+        group.create_dataset("imu", data=imu.astype(np.float32))
 
-        return str(file_path)
-         
+        group.attrs["subject_id"]= self._subject_id
+        group.attrs["session_id"]= self._session_id
+        group.attrs["gesture_id"]= gesture_id
+        group.attrs["gesture_name"]= gesture_name
+        group.attrs["trial_id"]= trial_id
+        group.attrs["date"]= str(date.today())
+
+    def close(self) -> None:
+        self._file.close()

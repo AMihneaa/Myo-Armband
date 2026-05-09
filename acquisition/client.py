@@ -40,6 +40,7 @@ class MyoStreamClient(MyoClient):
         self._emg_buffer: CircularBuffer= CircularBuffer(capacity= emg_buffer_capacity)
         
         self._imu_buffer: CircularBuffer= CircularBuffer(capacity= imu_buffer_capacity)
+        self._imu_callback: Optional[callable]= None
 
     async def on_classifier_event(self, ce: ClassifierEvent):
         pass
@@ -80,14 +81,18 @@ class MyoStreamClient(MyoClient):
     async def on_imu_data(self, imu: IMUData):
         t= time.monotonic()
 
-        self._imu_buffer.append(
-            IMUSample(
-                timestamp= t,
-                orientation= (imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z),
-                accelerometer= tuple(imu.accelerometer),
-                gyroscope= tuple(imu.gyroscope)
-            )
+        sample= IMUSample(
+            timestamp= t,
+            orientation= (imu.orientation.w, imu.orientation.x, imu.orientation.y, imu.orientation.z),
+            accelerometer= tuple(imu.accelerometer),
+            gyroscope= tuple(imu.gyroscope)
         )
+        self._imu_buffer.append(
+            sample
+        )
+
+        if self._imu_callback is not None:
+            self._imu_callback(sample)
 
     async def on_motion_event(self, me: MotionEvent):
         pass
@@ -97,6 +102,10 @@ class MyoStreamClient(MyoClient):
 
     def set_emg_callback(self, fn: callable) -> None:
         self._emg_callback= fn
+
+
+    def set_imu_callback(self, fn: callable) -> None:
+        self._imu_callback= fn
 
     @property
     def emg_buffer(self) -> CircularBuffer:
