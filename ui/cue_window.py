@@ -1,7 +1,13 @@
 import pyqtgraph as pg
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QMainWindow, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+    QPushButton,
+)
 from PySide6.QtGui import QFont
 
 from recording.session import SessionRecorder, SessionCue
@@ -64,10 +70,23 @@ class CueWindow(QMainWindow):
         timer_font.setPointSize(24)
         self._cue_timer.setFont(timer_font)
 
+        self._exit_btn= QPushButton("Exit")
+        exit_font= QFont()
+        exit_font.setPointSize(18)
+        self._exit_btn.setFont(exit_font)
+        self._exit_btn.setFixedHeight(60)
+        self._exit_btn.setStyleSheet(
+            "QPushButton { background: #c0392b; color: white; border-radius: 8px; }"
+            "QPushButton:hover { background: #e74c3c; }"
+        )
+        self._exit_btn.clicked.connect(self._on_exit)
+        self._exit_btn.setVisible(False)
+
         cue_layout.addStretch()
         cue_layout.addWidget(self._cue_text)
         cue_layout.addWidget(self._cue_timer)
         cue_layout.addStretch()
+        cue_layout.addWidget(self._exit_btn)
 
         layout.addWidget(self._cue_widget)
         self.setCentralWidget(root)
@@ -92,3 +111,11 @@ class CueWindow(QMainWindow):
             self._cue_timer.setText(f"{cue.timer:.1f}s")
         else:
             self._cue_timer.setText("")
+
+        if cue.text == "Session complete":
+            self._exit_btn.setVisible(True)
+            self._timer.stop()
+
+    def _on_exit(self) -> None:
+        from PySide6.QtWidgets import QApplication
+        QApplication.quit()
