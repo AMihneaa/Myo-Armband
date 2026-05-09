@@ -3,8 +3,7 @@ import numpy as np
 from collections import deque
 from enum import Enum
 
-from myo import EMGSample, IMUSample
-
+from acquisition.buffer import EMGSample, IMUSample
 
 class TrialState(Enum):
     IDLE= 'idle'
