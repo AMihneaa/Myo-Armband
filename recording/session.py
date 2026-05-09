@@ -1,14 +1,32 @@
 import asyncio
 
-from config import REST_DURATION_S, PREPARE_DURATION_S
+from dataclasses import dataclass
+
+from config import (
+    PREPARE_DURATION_S,
+    REST_BETWEEN_TRIALS_S,
+    REST_BETWEEN_GESTURES_S,
+    FAMILIARIZATION_REPS,
+    FAMILIARIZATION_DURATION_S,
+    FAMILIARIZATION_REST_S,
+    GESTURE_LABELS,
+)
 
 from acquisition.client import MyoStreamClient
 from recording.trial import TrialRecorder
 from storage.writer import TrialWriter
 
+
+@dataclass
+class SessionCue:
+    color: str
+    text: str
+    timer: float= 0.0
+
+
 class SessionRecorder:
     def __init__(
-        self, 
+        self,
         client: MyoStreamClient,
         trial_recorder: TrialRecorder,
         writer: TrialWriter,
@@ -21,29 +39,68 @@ class SessionRecorder:
         self._gesture_ids= gesture_ids
         self._n_trials= n_trials
 
-        self.cue: str = "IDLE"
+        self.cue= SessionCue(color="gray", text="IDLE")
 
         self._client.set_emg_callback(self._trial_recorder.on_emg_sample)
+        self._client.set_imu_callback(self._trial_recorder.on_imu_sample)
+
+    async def _rest(self, duration: float, text: str) -> None:
+        elapsed= 0.0
+        step= 0.1
+
+        while elapsed < duration:
+            remaining= duration - elapsed
+            self.cue= SessionCue(color="orange", text=text, timer=remaining)
+            await asyncio.sleep(step)
+            elapsed += step
+
+    async def _familiarization(self, gesture_id: int) -> None:
+        gesture_name= GESTURE_LABELS[gesture_id]
+
+        for rep in range(1, FAMILIARIZATION_REPS + 1):
+            self.cue= SessionCue(
+                color="white",
+                text=f"Familiarization | {gesture_name} | Rep {rep}/{FAMILIARIZATION_REPS}",
+            )
+            await asyncio.sleep(PREPARE_DURATION_S)
+
+            self.cue= SessionCue(color="green", text=f"GO | {gesture_name}")
+            await asyncio.sleep(FAMILIARIZATION_DURATION_S)
+
+            if rep < FAMILIARIZATION_REPS:
+                await self._rest(FAMILIARIZATION_REST_S, f"Rest | Next rep {rep + 1}/{FAMILIARIZATION_REPS}")
 
     async def run(self) -> None:
-        for gesture_id in self._gesture_ids:
-            for trial_num in range(1, self._n_trials + 1):
+        for gesture_idx, gesture_id in enumerate(self._gesture_ids):
+            gesture_name= GESTURE_LABELS[gesture_id]
 
-                self.cue= f'Gesture {gesture_id} | Trial {trial_num} | Get ready...'
+            await self._familiarization(gesture_id)
+
+            for trial_num in range(1, self._n_trials + 1):
+                self.cue= SessionCue(
+                    color="white",
+                    text=f"{gesture_name} | Trial {trial_num}/{self._n_trials} | Prepare",
+                )
                 await asyncio.sleep(PREPARE_DURATION_S)
 
-                self.cue= f'Recording...'
+                self.cue= SessionCue(color="green", text=f"GO | {gesture_name} | Trial {trial_num}")
                 self._trial_recorder.start()
 
                 while not self._trial_recorder.is_complete():
                     await asyncio.sleep(0.01)
 
-                array= self._trial_recorder.get_array()
-                self._writer.save(array, gesture_id, trial_num)
-                self.cue= f'Saved. Resting...'
+                emg= self._trial_recorder.get_emg_array()
+                imu= self._trial_recorder.get_imu_array()
+                self._writer.save(emg, imu, gesture_id, trial_num)
 
                 self._trial_recorder.reset()
-                await asyncio.sleep(REST_DURATION_S)
 
-        self.cue= f'Session complete.'
+                if trial_num < self._n_trials:
+                    await self._rest(REST_BETWEEN_TRIALS_S, f"Rest | {gesture_name} | Next trial {trial_num + 1}")
 
+            if gesture_idx < len(self._gesture_ids) - 1:
+                next_gesture= GESTURE_LABELS[self._gesture_ids[gesture_idx + 1]]
+                await self._rest(REST_BETWEEN_GESTURES_S, f"Rest | Next gesture: {next_gesture}")
+
+        self._writer.close()
+        self.cue= SessionCue(color="gray", text="Session complete")
