@@ -1,7 +1,12 @@
 import pyqtgraph as pg
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QScrollArea,
+)
 
 from acquisition.client import MyoStreamClient
 
@@ -10,6 +15,9 @@ EMG_COLORS= ['#e6194b', '#3cb44b', '#4363d8', '#f58231',
              '#911eb4', '#42d4f4', '#f032e6', '#bfef45']
 IMU_COLORS= ['r', 'g', 'b']
 IMU_LABELS= ['X', 'Y', 'Z']
+
+PLOT_HEIGHT= 200
+PLOT_WIDTH= 1360
 
 
 class SignalWindow(QMainWindow):
@@ -23,43 +31,52 @@ class SignalWindow(QMainWindow):
         self._client= client
 
         self.setWindowTitle("Myo Recorder — Signals")
-        self.resize(1400, 1200)
+        self.resize(1400, 900)
 
         self._build_ui()
         self._build_curves()
         self._start_timer(refresh_ms)
 
     def _build_ui(self) -> None:
-        root= QWidget()
-        layout= QVBoxLayout(root)
+        scroll_area= QScrollArea()
+        scroll_area.setWidgetResizable(True)
+
+        container= QWidget()
+        layout= QVBoxLayout(container)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(4)
 
-        self._graphics= pg.GraphicsLayoutWidget()
-        layout.addWidget(self._graphics)
-        self.setCentralWidget(root)
-
         self._emg_plots= []
         for ch in range(8):
-            plot= self._graphics.addPlot(title=f"EMG ch{ch + 1}")
+            plot= pg.PlotWidget(title=f"EMG ch{ch + 1}")
+            plot.setFixedHeight(PLOT_HEIGHT)
+            plot.setMinimumWidth(PLOT_WIDTH)
             plot.showGrid(x=True, y=True)
             plot.setLabel("left", f"ch{ch + 1}")
             if ch == 7:
                 plot.setLabel("bottom", "samples")
             self._emg_plots.append(plot)
-            self._graphics.nextRow()
+            layout.addWidget(plot)
 
-        self._acc_plot= self._graphics.addPlot(title="Accelerometer")
+        self._acc_plot= pg.PlotWidget(title="Accelerometer")
+        self._acc_plot.setFixedHeight(PLOT_HEIGHT)
+        self._acc_plot.setMinimumWidth(PLOT_WIDTH)
         self._acc_plot.showGrid(x=True, y=True)
         self._acc_plot.setLabel("left", "g")
         self._acc_plot.addLegend()
-        self._graphics.nextRow()
+        layout.addWidget(self._acc_plot)
 
-        self._gyro_plot= self._graphics.addPlot(title="Gyroscope")
+        self._gyro_plot= pg.PlotWidget(title="Gyroscope")
+        self._gyro_plot.setFixedHeight(PLOT_HEIGHT)
+        self._gyro_plot.setMinimumWidth(PLOT_WIDTH)
         self._gyro_plot.showGrid(x=True, y=True)
         self._gyro_plot.setLabel("left", "deg/s")
         self._gyro_plot.setLabel("bottom", "samples")
         self._gyro_plot.addLegend()
+        layout.addWidget(self._gyro_plot)
+
+        scroll_area.setWidget(container)
+        self.setCentralWidget(scroll_area)
 
     def _build_curves(self) -> None:
         self._emg_curves= []
