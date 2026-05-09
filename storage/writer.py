@@ -16,7 +16,7 @@ class TrialWriter:
         self._subject_id= subject_id
         self._session_id= session_id
 
-        out_dir= Path(HDF5_DIR)
+        out_dir= Path(HDF5_DIR) / f"session_{session_id}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         filename= HDF5_FILENAME_TEMPLATE.format(
