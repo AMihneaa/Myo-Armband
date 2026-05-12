@@ -98,4 +98,9 @@ if __name__ == "__main__":
     app= QApplication(sys.argv)
     qasync.run(main(app, args))
 
-    
+'''
+
+python main.py --p_id 1 --s_id 1 --gesture_ids 3 4 --start_trial 1 --trials 6
+
+
+'''
