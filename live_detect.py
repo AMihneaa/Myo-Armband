@@ -18,7 +18,7 @@ from acquisition.client import MyoStreamClient
 from myo.types import ClassifierMode, EMGMode, IMUMode
 
 AI_SERVICE_HOST= "localhost"
-AI_SERVICE_PORT= 50052
+AI_SERVICE_PORT= 49783
 
 HISTORY= 200
 EMG_COLORS= [
@@ -289,6 +289,7 @@ async def grpc_prediction_stream(
 
     try:
         async for reply in stub.StreamLiveInference(request_generator()):
+            print(f"Reply: prediction={reply.prediction!r} confidence={reply.confidence:.3f} error={reply.error!r}")
             if reply.error:
                 print(f"[gRPC error] window={reply.window_id} err={reply.error}")
                 continue
