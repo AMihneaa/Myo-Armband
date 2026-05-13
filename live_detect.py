@@ -1,6 +1,8 @@
 import sys
+import uuid
 import asyncio
 import numpy as np
+import grpc
 import qasync
 
 from collections import deque
@@ -13,11 +15,10 @@ from PySide6.QtGui import QPainter, QColor, QPen, QFont, QLinearGradient, QPaint
 
 from config import BLE_ADDR
 from acquisition.client import MyoStreamClient
-from inference.live_pipeline import LiveInferencePipeline
-
 from myo.types import ClassifierMode, EMGMode, IMUMode
 
-MODEL_PATH= "models/final_model_propriu.pkl"
+AI_SERVICE_HOST= "localhost"
+AI_SERVICE_PORT= 50052
 
 HISTORY= 200
 EMG_COLORS= [
@@ -35,10 +36,12 @@ GESTURE_NAMES= {
     4: "Wrist Flexion",
 }
 
+
 class SignalBridge(QObject):
     emg_ready=        Signal(object)
     imu_ready=        Signal(object)
-    prediction_ready= Signal(int, float)
+    prediction_ready= Signal(str, float)
+
 
 class OscilloscopeWidget(QWidget):
     def __init__(self, n_traces, colors, label, y_range=(-128, 128), parent=None):
@@ -77,8 +80,7 @@ class OscilloscopeWidget(QWidget):
         zero_pen= QPen(QColor("#2A2A4A"))
         zero_pen.setWidth(1)
         p.setPen(zero_pen)
-        zero_y= int(h * 0.5)
-        p.drawLine(0, zero_y, w, zero_y)
+        p.drawLine(0, int(h * 0.5), w, int(h * 0.5))
 
         y_range= self._y_max - self._y_min if self._y_max != self._y_min else 1
 
@@ -103,11 +105,10 @@ class OscilloscopeWidget(QWidget):
 
         label_pen= QPen(QColor("#444466"))
         p.setPen(label_pen)
-        font= QFont("Courier New", 8)
-        p.setFont(font)
+        p.setFont(QFont("Courier New", 8))
         p.drawText(4, 14, self._label)
-
         p.end()
+
 
 class PredictionWidget(QWidget):
     def __init__(self, parent=None):
@@ -137,27 +138,24 @@ class PredictionWidget(QWidget):
 
         if self._gesture is None:
             p.setPen(QColor("#333355"))
-            font= QFont("Courier New", 11)
-            p.setFont(font)
+            p.setFont(QFont("Courier New", 11))
             p.drawText(self.rect(), Qt.AlignCenter, "WAITING\nFOR SIGNAL")
             p.end()
             return
 
-        name= GESTURE_NAMES.get(self._gesture, f"Gesture {self._gesture}")
+        gesture_int= int(self._gesture) if str(self._gesture).isdigit() else -1
+        name= GESTURE_NAMES.get(gesture_int, f"Gesture {self._gesture}")
 
         p.setPen(QColor("#00FF9C"))
-        num_font= QFont("Courier New", 36, QFont.Bold)
-        p.setFont(num_font)
+        p.setFont(QFont("Courier New", 36, QFont.Bold))
         p.drawText(0, 10, w, int(h * 0.45), Qt.AlignCenter, str(self._gesture))
 
         p.setPen(QColor("#AAAACC"))
-        name_font= QFont("Courier New", 10)
-        p.setFont(name_font)
+        p.setFont(QFont("Courier New", 10))
         p.drawText(0, int(h * 0.48), w, 24, Qt.AlignCenter, name)
 
         p.setPen(QColor("#555577"))
-        label_font= QFont("Courier New", 8)
-        p.setFont(label_font)
+        p.setFont(QFont("Courier New", 8))
         p.drawText(8, int(h * 0.68), f"CONF  {self._confidence:.1%}")
 
         bar_x= 8
@@ -174,6 +172,7 @@ class PredictionWidget(QWidget):
             p.fillRect(bar_x, bar_y, fill_w, bar_h, grad)
 
         p.end()
+
 
 class LiveDetectWindow(QMainWindow):
     def __init__(self, bridge: SignalBridge):
@@ -203,10 +202,10 @@ class LiveDetectWindow(QMainWindow):
         self._emg_plots= []
         for i in range(8):
             plot= OscilloscopeWidget(
-                n_traces= 1,
-                colors= [EMG_COLORS[i]],
-                label= f"EMG CH{i}",
-                y_range= (-128, 128),
+                n_traces=1,
+                colors=[EMG_COLORS[i]],
+                label=f"EMG CH{i}",
+                y_range=(-128, 128),
             )
             emg_grid.addWidget(plot, i // 4, i % 4)
             self._emg_plots.append(plot)
@@ -216,18 +215,18 @@ class LiveDetectWindow(QMainWindow):
         bottom.setSpacing(6)
 
         self._gyro_plot= OscilloscopeWidget(
-            n_traces= 3,
-            colors= GYRO_COLORS,
-            label= "GYROSCOPE  X/Y/Z",
-            y_range= (-2000, 2000),
+            n_traces=3,
+            colors=GYRO_COLORS,
+            label="GYROSCOPE  X/Y/Z",
+            y_range=(-2000, 2000),
         )
         bottom.addWidget(self._gyro_plot, stretch=2)
 
         self._accel_plot= OscilloscopeWidget(
-            n_traces= 3,
-            colors= ACCEL_COLORS,
-            label= "ACCELEROMETER  X/Y/Z",
-            y_range= (-4, 4),
+            n_traces=3,
+            colors=ACCEL_COLORS,
+            label="ACCELEROMETER  X/Y/Z",
+            y_range=(-4, 4),
         )
         bottom.addWidget(self._accel_plot, stretch=2)
 
@@ -250,17 +249,55 @@ class LiveDetectWindow(QMainWindow):
         self._gyro_plot.push(gyro)
         self._accel_plot.push(accel)
 
-    def _on_prediction(self, gesture, confidence):
+    def _on_prediction(self, gesture: str, confidence: float):
         self._pred_widget.update_prediction(gesture, confidence)
 
 
-class DetectionPipeline(LiveInferencePipeline):
-    def __init__(self, bridge: SignalBridge, **kwargs):
-        super().__init__(**kwargs)
-        self._bridge= bridge
+async def grpc_prediction_stream(
+        sample_queue: asyncio.Queue,
+        bridge: SignalBridge,
+        session_id: str,
+        last_imu: dict,
+) -> None:
+    from app_client.gen.ai.v1 import ai_inference_pb2 as pb2
+    from app_client.gen.ai.v1 import ai_inference_pb2_grpc as pb2_grpc
 
-    def _on_prediction(self, gesture, confidence):
-        self._bridge.prediction_ready.emit(gesture, confidence)
+    channel= grpc.aio.insecure_channel(f"{AI_SERVICE_HOST}:{AI_SERVICE_PORT}")
+    stub= pb2_grpc.GestureInferenceServiceStub(channel)
+
+    window_id= 0
+
+    async def request_generator():
+        nonlocal window_id
+        while True:
+            chunk= await sample_queue.get()
+            if chunk is None:
+                break
+
+            flat= chunk.flatten().tolist()
+
+            yield pb2.LiveWindowRequest(
+                session_id=session_id,
+                window_id=window_id,
+                samples=flat,
+                n_channels=8,
+                sampling_rate=200.0,
+                accelerometer=list(last_imu["accel"]),
+                gyroscope=list(last_imu["gyro"]),
+            )
+            window_id += 1
+
+    try:
+        async for reply in stub.StreamLiveInference(request_generator()):
+            if reply.error:
+                print(f"[gRPC error] window={reply.window_id} err={reply.error}")
+                continue
+            if reply.prediction:
+                bridge.prediction_ready.emit(reply.prediction, reply.confidence)
+    except grpc.aio.AioRpcError as e:
+        print(f"gRPC stream error: {e.code()} — {e.details()}")
+    finally:
+        await channel.close()
 
 
 async def main(app):
@@ -268,54 +305,53 @@ async def main(app):
     app.aboutToQuit.connect(app_close_event.set)
 
     bridge= SignalBridge()
-
-    pipeline= DetectionPipeline(
-        bridge= bridge,
-        payload_path= MODEL_PATH,
-        fs= 200.0,
-        bp_low= 10.0,
-        bp_high= 95.0,
-        env_cutoff= 10.0,
-        notch_freq= 50.0,
-        notch_q= 30.0,
-        apply_notch= True,
-        n_channels= 8,
-        win= 50,
-        hop= 25,
-        bp_bands= [(10.0, 25.0), (25.0, 40.0), (40.0, 65.0), (65.0, 95.0)],
-        ievd_L= 25,
-        ievd_k= 10,
-        smoother_n= 5,
-    )
+    sample_queue= asyncio.Queue(maxsize=200)
+    session_id= str(uuid.uuid4())
+    last_imu= {"accel": [0.0, 0.0, 0.0], "gyro": [0.0, 0.0, 0.0]}
 
     client= await MyoStreamClient.with_device(
         BLE_ADDR,
-        aggregate_all= False,
-        aggregate_emg= False,
+        aggregate_all=False,
+        aggregate_emg=False,
     )
 
     def emg_callback(sample):
         chunk= np.array([sample.channels], dtype=np.float32)
-        pipeline.on_emg(chunk)
+        try:
+            sample_queue.put_nowait(chunk)
+        except asyncio.QueueFull:
+            pass
         bridge.emg_ready.emit([sample.channels])
 
+    def imu_callback(sample):
+        last_imu["accel"]= list(sample.accelerometer)
+        last_imu["gyro"]= list(sample.gyroscope)
+        bridge.imu_ready.emit((sample.gyroscope, sample.accelerometer))
+
     client.set_emg_callback(emg_callback)
+    client.set_imu_callback(imu_callback)
 
     window= LiveDetectWindow(bridge)
     window.show()
 
     try:
         await client.setup(
-            classifier_mode= ClassifierMode.DISABLED,
-            emg_mode= EMGMode.SEND_RAW,
-            imu_mode= IMUMode.SEND_ALL,
+            classifier_mode=ClassifierMode.DISABLED,
+            emg_mode=EMGMode.SEND_RAW,
+            imu_mode=IMUMode.SEND_ALL,
         )
         await client.start()
+
+        asyncio.ensure_future(
+            grpc_prediction_stream(sample_queue, bridge, session_id, last_imu)
+        )
+
         await app_close_event.wait()
 
     except Exception as e:
         print(f"Error: {e}")
     finally:
+        await sample_queue.put(None)
         await client.stop()
         await client.disconnect()
 
