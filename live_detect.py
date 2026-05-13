@@ -17,7 +17,7 @@ from inference.live_pipeline import LiveInferencePipeline
 
 from myo.types import ClassifierMode, EMGMode, IMUMode
 
-MODEL_PATH= "models/xgb_gpu_search_200hz_g1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17_trainSession1_valSession2_testSession3_20260326_160454_trainval_final.pkl"
+MODEL_PATH= "models/final_model_propriu.pkl"
 
 HISTORY= 200
 EMG_COLORS= [
@@ -28,13 +28,12 @@ GYRO_COLORS=  ["#FF4444", "#44FF44", "#4444FF"]
 ACCEL_COLORS= ["#FF8844", "#44FF88", "#8844FF"]
 
 GESTURE_NAMES= {
-    1:  "Mana Relaxata",
-    2:  "Pumn inchis",
-    5:  "Palma Deschisa",
-    7:  "Degetul Mare Sus",
-    9:  "Semnul OK",
+    0: "Relax",
+    1: "Hand Open",
+    2: "Hand Close",
+    3: "Wrist Extension",
+    4: "Wrist Flexion",
 }
- 
 
 class SignalBridge(QObject):
     emg_ready=        Signal(object)

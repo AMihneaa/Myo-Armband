@@ -35,3 +35,21 @@ ENV_CUTOFF: float= 10.0
 NOTCH_FREQ: float= 50.0
 NOTCH_Q: float= 30.0
 APPLY_NOTCH: bool= True
+
+
+BASE_STAT= [
+    "env_rms",
+    "env_mav",
+    "raw_rms",
+    "raw_mav",
+    "iemg",
+    "ssi",
+    "var",
+    "wl",
+    "zc",
+    "ssc",
+    "wamp",
+    "log_rms",
+    "mnf",
+    "mdf",
+]
