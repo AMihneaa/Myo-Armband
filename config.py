@@ -53,3 +53,6 @@ BASE_STAT= [
     "mnf",
     "mdf",
 ]
+
+API_WS_HOST= "localhost"
+API_WS_PORT= 8000
