@@ -18,3 +18,7 @@
 **/data_processed
 
 **/models
+
+**/output
+
+**/data_features/**
