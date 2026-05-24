@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
 '''
 
-python main.py --p_id 9 --s_id 2 --gesture_ids 0 1 2 3 4 --start_trial 1 --trials 6
+python main.py --p_id 1 --s_id 2 --gesture_ids 0 1 2 3 4 --start_trial 1 --trials 6
 
 
 '''
