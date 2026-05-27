@@ -27,9 +27,7 @@ async def _receiver(ws, bridge) -> None:
     async for raw in ws:
         try:
             message= json.loads(raw)
-            print(f"[ws_client] received: {message}")
             if message.get("type") == "prediction":
-                print(f"[ws_client] emitting: {message['gesture']} {message['confidence']:.3f}")
                 bridge.prediction_ready.emit(
                     message["gesture"],
                     float(message["confidence"]),
