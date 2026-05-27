@@ -44,6 +44,7 @@ async def main(app):
             pass
 
     def imu_callback(sample):
+
         bridge.imu_ready.emit((sample.gyroscope, sample.accelerometer))
         payload= json.dumps({
             "type": "imu",
@@ -54,6 +55,8 @@ async def main(app):
             send_queue.put_nowait(payload)
         except asyncio.QueueFull:
             pass
+        print(f"accel={[round(v,2) for v in sample.accelerometer]} gyro={[round(v,2) for v in sample.gyroscope]}")
+
 
     client.set_emg_callback(emg_callback)
     client.set_imu_callback(imu_callback)
