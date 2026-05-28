@@ -5,8 +5,9 @@ import qasync
 
 from PySide6.QtWidgets import QApplication
 
-from config import BLE_ADDR
+from config import BLE_ADDR, GYRO_CALIBRATION_SAMPLES
 from acquisition.client import MyoStreamClient
+from acquisition.calibrator import GyroBias
 from myo.types import ClassifierMode, EMGMode, IMUMode
 from ui.bridge import SignalBridge
 from ui.live_window import LiveDetectWindow
@@ -44,7 +45,6 @@ async def main(app):
             pass
 
     def imu_callback(sample):
-
         bridge.imu_ready.emit((sample.gyroscope, sample.accelerometer))
         payload= json.dumps({
             "type": "imu",
@@ -55,11 +55,13 @@ async def main(app):
             send_queue.put_nowait(payload)
         except asyncio.QueueFull:
             pass
-        print(f"accel={[round(v,2) for v in sample.accelerometer]} gyro={[round(v,2) for v in sample.gyroscope]}")
 
+    def calibration_done_callback(bias: GyroBias):
+        print(f"[calibration] complete — bias x={bias.x:.4f} y={bias.y:.4f} z={bias.z:.4f}")
 
     client.set_emg_callback(emg_callback)
     client.set_imu_callback(imu_callback)
+    client.set_calibration_callback(calibration_done_callback)
 
     window= LiveDetectWindow(bridge)
     window.show()
@@ -70,6 +72,9 @@ async def main(app):
             emg_mode=EMGMode.SEND_RAW,
             imu_mode=IMUMode.SEND_ALL,
         )
+
+        print(f"[calibration] hold arm still for ~{GYRO_CALIBRATION_SAMPLES // 50}s ({GYRO_CALIBRATION_SAMPLES} samples at 50 Hz)...")
+
         await client.start()
 
         print("[main] starting websocket session")
