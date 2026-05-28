@@ -56,6 +56,7 @@ async def main(app):
         except asyncio.QueueFull:
             pass
 
+
     def calibration_done_callback(bias: GyroBias):
         print(f"[calibration] complete — bias x={bias.x:.4f} y={bias.y:.4f} z={bias.z:.4f}")
 
