@@ -22,3 +22,6 @@
 **/output
 
 **/data_features/**
+
+graphify-out/*
+.claude/*
