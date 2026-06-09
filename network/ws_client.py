@@ -41,6 +41,11 @@ async def _sender(ws, send_queue: asyncio.Queue) -> None:
         payload= await send_queue.get()
         if payload is None:
             return
+        while not send_queue.empty():
+            next_payload= send_queue.get_nowait()
+            if next_payload is None:
+                return
+            payload= next_payload
         try:
             await ws.send(payload)
         except Exception:
