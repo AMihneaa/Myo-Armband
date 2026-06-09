@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget,
     QGridLayout, QVBoxLayout, QHBoxLayout, QLabel, QFrame
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QLinearGradient, QPainterPath
 
 from ui.bridge import SignalBridge
@@ -25,6 +25,8 @@ GESTURE_NAMES= {
     4: "Wrist Flexion",
 }
 
+RENDER_HZ= 30
+
 
 class OscilloscopeWidget(QWidget):
     def __init__(self, n_traces, colors, label, y_range=(-128, 128), parent=None):
@@ -39,7 +41,6 @@ class OscilloscopeWidget(QWidget):
     def push(self, values):
         for i, v in enumerate(values[:self._n]):
             self._buffers[i].append(float(v))
-        self.update()
 
     def paintEvent(self, event):
         p= QPainter(self)
@@ -221,6 +222,17 @@ class LiveDetectWindow(QMainWindow):
         bridge.emg_ready.connect(self._on_emg)
         bridge.imu_ready.connect(self._on_imu)
         bridge.prediction_ready.connect(self._on_prediction)
+
+        self._render_timer= QTimer(self)
+        self._render_timer.setInterval(1000 // RENDER_HZ)
+        self._render_timer.timeout.connect(self._refresh_plots)
+        self._render_timer.start()
+
+    def _refresh_plots(self):
+        for plot in self._emg_plots:
+            plot.update()
+        self._gyro_plot.update()
+        self._accel_plot.update()
 
     def _on_emg(self, samples):
         for s in samples:
