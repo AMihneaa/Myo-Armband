@@ -5,7 +5,7 @@ import qasync
 
 from PySide6.QtWidgets import QApplication
 
-from config import BLE_ADDR, GYRO_CALIBRATION_SAMPLES
+from config import BLE_ADDR, GYRO_CALIBRATION_SAMPLES, EMG_WINDOW_SIZE, EMG_HOP_SIZE
 from acquisition.client import MyoStreamClient
 from acquisition.calibrator import GyroBias
 from myo.types import ClassifierMode, EMGMode, IMUMode
@@ -22,7 +22,7 @@ async def main(app):
     app.aboutToQuit.connect(app_close_event.set)
 
     bridge= SignalBridge()
-    send_queue= asyncio.Queue(maxsize=400)
+    send_queue= asyncio.Queue(maxsize=32)
 
     print("[main] connecting to myo")
 
@@ -32,11 +32,22 @@ async def main(app):
         aggregate_emg=False,
     )
 
+    emg_window_buffer= []
+
     def emg_callback(sample):
         bridge.emg_ready.emit([sample.channels])
+
+        emg_window_buffer.append(list(sample.channels))
+
+        if len(emg_window_buffer) < EMG_WINDOW_SIZE:
+            return
+
+        samples_to_send= [row for row in emg_window_buffer]
+        del emg_window_buffer[:EMG_HOP_SIZE]
+
         payload= json.dumps({
             "type": "emg",
-            "samples": [list(sample.channels)],
+            "samples": samples_to_send,
             "n_channels": 8,
         })
         try:
@@ -45,7 +56,9 @@ async def main(app):
             pass
 
     def imu_callback(sample):
+        print(f"accel={[round(v,3) for v in sample.accelerometer]}")
         bridge.imu_ready.emit((sample.gyroscope, sample.accelerometer))
+
         payload= json.dumps({
             "type": "imu",
             "accelerometer": list(sample.accelerometer),
@@ -55,7 +68,6 @@ async def main(app):
             send_queue.put_nowait(payload)
         except asyncio.QueueFull:
             pass
-
 
     def calibration_done_callback(bias: GyroBias):
         print(f"[calibration] complete — bias x={bias.x:.4f} y={bias.y:.4f} z={bias.z:.4f}")
