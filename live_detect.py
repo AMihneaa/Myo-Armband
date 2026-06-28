@@ -56,7 +56,9 @@ async def main(app):
             pass
 
     def imu_callback(sample):
+        print(f"accel={[round(v,3) for v in sample.accelerometer]}")
         bridge.imu_ready.emit((sample.gyroscope, sample.accelerometer))
+
         payload= json.dumps({
             "type": "imu",
             "accelerometer": list(sample.accelerometer),
